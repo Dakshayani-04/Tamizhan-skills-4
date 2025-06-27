@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Student Management Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background: #eef2f3; padding: 20px; }
+    h1 { text-align: center; color: #333; }
+    .form-container, .search-box, .filter-box {
+      background: #fff; padding: 15px; border-radius: 8px;
+      margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    input, select, button {
+      padding: 10px; margin: 5px; border: 1px solid #ccc;
+      border-radius: 5px; width: 100%;
+    }
+    table {
+      width: 100%; border-collapse: collapse;
+      background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    th, td {
+      padding: 10px; text-align: left; border-bottom: 1px solid #ccc;
+    }
+    th { background-color: #007bff; color: white; }
+    .actions button {
+      margin-right: 5px; padding: 5px 10px;
+      border: none; border-radius: 4px; cursor: pointer;
+    }
+    .edit-btn { background: #28a745; color: white; }
+    .delete-btn { background: #dc3545; color: white; }
+    canvas { background: #fff; border-radius: 8px; margin-top: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+
+    @media (min-width: 768px) {
+      .form-container, .search-box, .filter-box {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .form-container input,
+      .form-container select,
+      .form-container button,
+      .filter-box input,
+      .filter-box select {
+        flex: 1;
+        margin: 5px;
+        max-width: 200px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>📚 Student Management Dashboard</h1>
+
+  <div class="form-container">
+    <input type="text" id="name" placeholder="Name" required>
+    <input type="text" id="regNo" placeholder="Registration No" required>
+    <input type="text" id="dept" placeholder="Department" required>
+    <select id="year">
+      <option value="">Year</option>
+      <option value="1st">1st</option>
+      <option value="2nd">2nd</option>
+      <option value="3rd">3rd</option>
+      <option value="4th">4th</option>
+    </select>
+    <input type="number" id="marks" placeholder="Marks (%)" min="0" max="100" required>
+    <button onclick="addOrUpdateStudent()">Submit</button>
+  </div>
+
+  <div class="search-box">
+    <input type="text" id="search" placeholder="Search by name or reg no..." onkeyup="renderTable()">
+  </div>
+
+  <div class="filter-box">
+    <label>Filter by Department:</label>
+    <input type="text" id="filterDept" oninput="renderTable()">
+    <label>Filter by Year:</label>
+    <select id="filterYear" onchange="renderTable()">
+      <option value="">All</option>
+      <option value="1st">1st</option>
+      <option value="2nd">2nd</option>
+      <option value="3rd">3rd</option>
+      <option value="4th">4th</option>
+    </select>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Reg No</th>
+        <th>Dept</th>
+        <th>Year</th>
+        <th>Marks</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="studentTableBody"></tbody>
+  </table>
+
+  <canvas id="marksChart" height="100"></canvas>
+
+  <script>
+    let students = JSON.parse(localStorage.getItem('students')) || [];
+    let editIndex = -1;
+
+    function renderTable() {
+      const search = document.getElementById('search').value.toLowerCase();
+      const deptFilter = document.getElementById('filterDept').value.toLowerCase();
+      const yearFilter = document.getElementById('filterYear').value;
+      const tbody = document.getElementById('studentTableBody');
+      tbody.innerHTML = '';
+
+      const filtered = students.filter((s) =>
+        (s.name.toLowerCase().includes(search) ||
+         s.regNo.toLowerCase().includes(search)) &&
+        (deptFilter === '' || s.dept.toLowerCase().includes(deptFilter)) &&
+        (yearFilter === '' || s.year === yearFilter)
+      );
+
+      filtered.forEach((s, i) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${s.name}</td>
+          <td>${s.regNo}</td>
+          <td>${s.dept}</td>
+          <td>${s.year}</td>
+          <td>${s.marks}</td>
+          <td class="actions">
+            <button class="edit-btn" onclick="editStudent(${i})">Edit</button>
+            <button class="delete-btn" onclick="deleteStudent(${i})">Delete</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+      updateChart(filtered);
+      localStorage.setItem('students', JSON.stringify(students));
+    }
+
+    function addOrUpdateStudent() {
+      const name = document.getElementById('name').value.trim();
+      const regNo = document.getElementById('regNo').value.trim();
+      const dept = document.getElementById('dept').value.trim();
+      const year = document.getElementById('year').value;
+      const marks = document.getElementById('marks').value.trim();
+
+      if (!name || !regNo || !dept || !year || !marks) {
+        return alert('Please fill all fields.');
+      }
+
+      const student = { name, regNo, dept, year, marks: Number(marks) };
+
+      if (editIndex === -1) {
+        students.push(student);
+      } else {
+        students[editIndex] = student;
+        editIndex = -1;
+      }
+
+      localStorage.setItem('students', JSON.stringify(students));
+      clearForm();
+      renderTable();
+    }
+
+    function deleteStudent(index) {
+      if (confirm('Are you sure you want to delete this student?')) {
+        students.splice(index, 1);
+        localStorage.setItem('students', JSON.stringify(students));
+        renderTable();
+      }
+    }
+
+    function editStudent(index) {
+      const s = students[index];
+      document.getElementById('name').value = s.name;
+      document.getElementById('regNo').value = s.regNo;
+      document.getElementById('dept').value = s.dept;
+      document.getElementById('year').value = s.year;
+      document.getElementById('marks').value = s.marks;
+      editIndex = index;
+    }
+
+    function clearForm() {
+      document.getElementById('name').value = '';
+      document.getElementById('regNo').value = '';
+      document.getElementById('dept').value = '';
+      document.getElementById('year').value = '';
+      document.getElementById('marks').value = '';
+    }
+
+    let chart;
+    function updateChart(data) {
+      const ctx = document.getElementById('marksChart').getContext('2d');
+      const labels = data.map(s => s.name);
+      const marks = data.map(s => s.marks);
+
+      if (chart) chart.destroy();
+
+      chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Marks (%)',
+            data: marks,
+            backgroundColor: '#007bff',
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: { beginAtZero: true, max: 100 }
+          }
+        }
+      });
+    }
+
+    renderTable();
+  </script>
+
+</body>
+</html>
